@@ -1,0 +1,6 @@
+{
+  "name": "ATtiny10 Simulator",
+  "description": "Hardware and instruction-level simulation environment for an ATtiny10 embedded C firmware, featuring live memory mapping and circuit interaction.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
