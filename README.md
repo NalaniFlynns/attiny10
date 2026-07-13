@@ -6,7 +6,9 @@
 
 This contains everything you need to run your app locally.
 
-View your app in AI Studio: https://ai.studio/apps/0106e3e2-8396-41a6-9229-fce4f686af0f
+View app in AI Studio: https://ai.studio/apps/0106e3e2-8396-41a6-9229-fce4f686af0f
+
+https://attiny10.nalaniflynn.cn
 
 ## Run Locally
 
