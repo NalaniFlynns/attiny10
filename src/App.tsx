@@ -722,9 +722,9 @@ function PWMWaveform({ duty, freq = 15600 }: { duty: number, freq?: number }) {
         {/* Draw a CSS based waveform */}
         <div className="absolute inset-0 flex">
             {Array.from({length: 10}).map((_, i) => (
-                <div key={i} className="h-full flex flex-col justify-end" style={{ width: '10%' }}>
-                    <div className="bg-emerald-500 w-full" style={{ height: duty > 0 ? '100%' : '0%', width: `${duty * 100}%` }}></div>
-                    <div className="bg-zinc-900 w-full" style={{ height: duty < 1 ? '10%' : '0%', width: `${(1 - duty) * 100}%` }}></div>
+                <div key={i} className="h-full flex flex-row items-end" style={{ width: '10%' }}>
+                    <div className="bg-emerald-500 h-full border-r border-emerald-400" style={{ width: `${(1 - duty) * 100}%`, display: (1 - duty) > 0 ? 'block' : 'none' }}></div>
+                    <div className="bg-emerald-900/50 h-[10%] border-l border-emerald-800" style={{ width: `${duty * 100}%`, display: duty > 0 ? 'block' : 'none' }}></div>
                 </div>
             ))}
         </div>
