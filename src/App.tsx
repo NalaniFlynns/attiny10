@@ -1,8 +1,8 @@
 import React, { useState, Fragment, useEffect, useRef } from 'react';
 import { Cpu, Zap, FastForward, RotateCcw, Activity, Settings2, Database } from 'lucide-react';
-import { IO, SRAM, getLedVoltage, useSimulator, FirmwareConfig, defaultFirmwareConfig, getVlmVoltage } from './useSimulator';
+import { IO, SRAM, getLedVoltage, useSimulator, FirmwareConfig, defaultFirmwareConfig, getVlmVoltage, getTabs, calcScale } from './useSimulator';
 
-function HdrSmdLed({ voltage, ocr0al }: { voltage: number, ocr0al: number }) {
+function HdrSmdLed({ voltage, iLed, duty }: { voltage: number, iLed: number, duty: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const deviceRef = useRef<any>(null);
   const contextRef = useRef<any>(null);
@@ -45,7 +45,7 @@ function HdrSmdLed({ voltage, ocr0al }: { voltage: number, ocr0al: number }) {
     const context = contextRef.current;
     
     // Convert 0-255 PWM to intensity (with gamma curve approx). 255 -> 5.0 HDR multiplier
-    let intensity = (voltage > 0 && ocr0al > 0) ? Math.pow(ocr0al / 255.0, 2.2) * 5.0 : 0;
+    let intensity = (duty > 0) ? Math.pow(duty, 2.2) * 5.0 * (iLed > 0 ? 1 : 0) : 0;
     
     try {
       const commandEncoder = device.createCommandEncoder();
@@ -63,7 +63,7 @@ function HdrSmdLed({ voltage, ocr0al }: { voltage: number, ocr0al: number }) {
     } catch(e) {
        // Ignore render errors
     }
-  }, [voltage, ocr0al]);
+  }, [voltage, (duty * 255)]);
 
   return (
     <div className="relative mb-6 flex flex-col items-center group">
@@ -83,20 +83,20 @@ function HdrSmdLed({ voltage, ocr0al }: { voltage: number, ocr0al: number }) {
           <div 
             className="absolute inset-0 rounded-sm transition-colors duration-[16ms]"
             style={{ 
-              backgroundColor: (voltage > 0 && ocr0al > 0) ? `rgba(255, ${Math.floor(ocr0al/4)}, ${Math.floor(ocr0al/4)}, ${0.8 + 0.2 * (ocr0al/255)})` : 'transparent',
-              boxShadow: (voltage > 0 && ocr0al > 0) 
-                ? `0 0 ${20 + (ocr0al / 255) * 80}px ${5 + (ocr0al / 255) * 20}px rgba(255, 0, 0, ${0.4 + (ocr0al/255)*0.6}), 
-                   0 0 ${ocr0al >= 250 ? '120px 40px rgba(255, 100, 100, 0.8)' : '0px 0px rgba(0,0,0,0)'}`
+              backgroundColor: (voltage > 0 && (duty * 255) > 0) ? `rgba(255, ${Math.floor((duty * 255)/4)}, ${Math.floor((duty * 255)/4)}, ${0.8 + 0.2 * ((duty * 255)/255)})` : 'transparent',
+              boxShadow: (voltage > 0 && (duty * 255) > 0) 
+                ? `0 0 ${20 + ((duty * 255) / 255) * 80}px ${5 + ((duty * 255) / 255) * 20}px rgba(255, 0, 0, ${0.4 + ((duty * 255)/255)*0.6}), 
+                   0 0 ${(duty * 255) >= 250 ? '120px 40px rgba(255, 100, 100, 0.8)' : '0px 0px rgba(0,0,0,0)'}`
                 : 'none',
               mixBlendMode: 'screen',
-              filter: (ocr0al >= 250 && voltage > 0) ? 'brightness(1.5) contrast(1.2)' : 'none'
+              filter: ((duty * 255) >= 250 && voltage > 0) ? 'brightness(1.5) contrast(1.2)' : 'none'
             }}
           ></div>
         </div>
       </div>
       <div className="mt-4 text-center">
-        <span className="text-[10px] font-bold text-zinc-500 tracking-widest">LED (0603 SMD)</span>
-        <div className="text-[9px] text-red-400/80 mt-1 tabular-nums">{(voltage > 0 ? ocr0al / 2.55 : 0).toFixed(1)}% DUTY</div>
+        <span className="text-[10px] font-bold text-zinc-500 tracking-widest">LED (0402 SMD)</span>
+        <div className="text-[9px] text-red-400/80 mt-1 tabular-nums">{(voltage > 0 ? (duty * 255) / 2.55 : 0).toFixed(1)}% DUTY</div>
         {hasWebGPU ? <div className="text-[8px] text-emerald-500/70 mt-1">HDR ACTIVE</div> : <div className="text-[8px] text-amber-500/70 mt-1">HDR OFF</div>}
       </div>
     </div>
@@ -164,12 +164,12 @@ export default function App() {
     warpSpeedRef.current = nextSpeed;
   };
 
-  const ledVoltage = getLedVoltage(mem, vccRef.current);
+  const ledVoltage = getLedVoltage(mem, vccRef.current, config).vLed;
   const sysState = mem[SRAM.sys_state];
   const stateLabels = ['SYS_OFF', 'SYS_ON', 'SYS_DIMMED'];
   
   // Format clock
-  const clockCycles = (mem[SRAM.clock_cycles_l] | (mem[SRAM.clock_cycles_l+1] << 8) | (mem[SRAM.clock_cycles_h] << 16) | (mem[SRAM.clock_cycles_h+1] << 24)) >>> 0;
+  const clockCycles = (mem[SRAM.clock_cycles_l] | (mem[SRAM.clock_cycles_l+1] << 8) | (mem[SRAM.clock_cycles_l+2] << 16) | (mem[SRAM.clock_cycles_l+3] << 24)) >>> 0;
   
   return (
     <div className="min-h-screen lg:h-screen bg-zinc-950 text-zinc-300 flex flex-col font-mono relative select-none selection:bg-emerald-900/50">
@@ -302,12 +302,13 @@ export default function App() {
             <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-4">Hardware Simulator</h3>
             
             <div className="flex-1 flex flex-col items-center justify-center relative">
-              {/* Virtual LED 0402 Style */}
-              <HdrSmdLed voltage={ledVoltage} ocr0al={mem[IO.OCR0AL]} />
+              {/* Virtual LED 0603 Style */}
+              <HdrSmdLed voltage={getLedVoltage(mem, vccSlider, config).vLed} iLed={getLedVoltage(mem, vccSlider, config).iLed} duty={getLedVoltage(mem, vccSlider, config).duty} />
 
               {/* Data Panel */}
               <div className="w-full flex-1 overflow-y-auto custom-scrollbar mt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  
                   
                   {/* .noinit Data */}
                   <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded col-span-1 md:col-span-2 flex justify-between items-center">
@@ -327,27 +328,37 @@ export default function App() {
                       </span>
                     </div>
                   </div>
+                  
+                  {/* Realtime Output Parameters */}
+                  <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded col-span-1 md:col-span-2">
+                    <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">VOUT & LED ESTIMATION</span>
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-300 tabular-nums">
+                      <div className="w-1/3">V_LED: <span className="text-emerald-400">{getLedVoltage(mem, vccSlider, config).vLed.toFixed(2)}V</span></div>
+                      <div className="w-1/3">I_LED: <span className="text-emerald-400">
+                        {(getLedVoltage(mem, vccSlider, config).iLed * 1000).toFixed(1)}mA
+                      </span></div>
+                      <div className="w-1/3 text-right">PWM: <span className="text-indigo-400">{mem[SRAM.comp_val]}</span><span className="text-[9px] text-zinc-600">/255</span></div>
+                    </div>
+                  </div>
 
                   <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded">
                     <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">SAVED LEVEL (.noinit)</span>
-                    <span className="text-sm font-bold text-amber-400">{mem[SRAM.saved_level]} <span className="text-[10px] text-zinc-600">/ {Math.min(config.CFG_MAX_LIMIT_LEVEL, config.CFG_PWM_MAP.length)}</span></span>
+                    <span className="text-sm font-bold text-amber-400">{mem[SRAM.saved_level]} <span className="text-[10px] text-zinc-600">/ {mem[SRAM.dyn_max_level] || 1}</span></span>
                   </div>
                   <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded">
-                    <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">IDLE SEC</span>
+                    <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">AVAILABLE LEVELS</span>
+                    <span className="text-sm font-bold text-purple-400 tabular-nums">{mem[SRAM.dyn_max_level]} {mem[SRAM.dyn_max_is_mapped] ? '(Mapped)' : '(Max)'}</span>
+                  </div>
+                  <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded">
+                    <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">IDLE TIME</span>
                     <span className="text-sm font-bold text-emerald-400 tabular-nums">
-                      {Math.floor((mem[SRAM.idle_sec] | (mem[SRAM.idle_sec+1]<<8)) / 3600).toString().padStart(2, '0')}:
-                      {Math.floor(((mem[SRAM.idle_sec] | (mem[SRAM.idle_sec+1]<<8)) % 3600) / 60).toString().padStart(2, '0')}:
-                      {((mem[SRAM.idle_sec] | (mem[SRAM.idle_sec+1]<<8)) % 60).toString().padStart(2, '0')}
+                      {mem[SRAM.idle_min].toString().padStart(2, '0')}:{mem[SRAM.idle_sec].toString().padStart(2, '0')}
                     </span>
-                  </div>
-                  <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded">
-                    <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">PWM DUTY (OCR0A)</span>
-                    <span className="text-sm font-bold text-indigo-400 tabular-nums">{mem[IO.OCR0AL].toString().padStart(3, ' ')} <span className="text-[10px] text-zinc-600">/ 255</span></span>
                   </div>
                   <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded">
                     <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">VLM STATUS</span>
                     <span className={`text-sm font-bold ${(mem[IO.VLMCSR] & 0x80) ? 'text-red-500 animate-pulse' : 'text-zinc-600'}`}>
-                      {(mem[IO.VLMCSR] & 0x80) ? `WARN <${getVlmVoltage(config.CFG_VLM_LEVEL)}V` : 'OK'}
+                      {(mem[IO.VLMCSR] & 0x80) ? `WARN <${getVlmVoltage(config.CFG_VLM_LEVEL).toFixed(1)}V` : 'OK'}
                     </span>
                   </div>
                   
@@ -358,25 +369,21 @@ export default function App() {
                       <div className="w-1/4">TICK: <span className="text-emerald-400">{mem[SRAM.tick_cnt].toString().padStart(2, '0')}</span><span className="text-[9px] text-zinc-600">/62</span></div>
                       <div className="w-1/4">HOLD: <span className="text-amber-400">{mem[SRAM.hold_ticks].toString().padStart(3, '0')}</span><span className="text-[9px] text-zinc-600">/{Math.floor(config.CFG_HOLD_SEC * 62)}</span></div>
                       <div className="w-1/4">VLM: <span className="text-red-400">{mem[SRAM.vlm_ticks].toString().padStart(2, '0')}</span><span className="text-[9px] text-zinc-600">/{Math.floor(config.CFG_VLM_FILTER_MS / 16)}</span></div>
-                      <div className="w-1/4">FLAG: <span className="text-indigo-400">{mem[SRAM.tick_flag]}</span></div>
+                      <div className="w-1/4">LAST_VLM: <span className="text-indigo-400">{mem[SRAM.last_vlm_state]}</span></div>
                     </div>
                   </div>
 
                   {/* BTN Bitfield */}
-                  <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded col-span-1 md:col-span-2">
+                  <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded col-span-1 md:col-span-2 mb-4">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="block text-[8px] text-zinc-500 tracking-widest">BTN STATE BITFIELD (db/r/last/dual)</span>
-                      <span className="text-[10px] font-mono text-zinc-600">0b{mem[SRAM.btn_state].toString(2).padStart(8, '0')}</span>
+                      <span className="block text-[8px] text-zinc-500 tracking-widest">BTN STATE BITFIELD (dual_e/dual_f/last2/last1)</span>
+                      <span className="text-[10px] font-mono text-zinc-600">0b{mem[SRAM.sys_flags].toString(2).padStart(4, '0')}</span>
                     </div>
                     <div className="grid grid-cols-4 gap-1 text-[8px] text-center font-mono">
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<0) ? 'bg-indigo-900/40 text-indigo-300' : 'bg-zinc-900/50 text-zinc-500'}`}>p_r1</div>
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<1) ? 'bg-indigo-900/40 text-indigo-300' : 'bg-zinc-900/50 text-zinc-500'}`}>p_r2</div>
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<2) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-900/50 text-zinc-500'}`}>db1</div>
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<3) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-900/50 text-zinc-500'}`}>db2</div>
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<4) ? 'bg-amber-900/40 text-amber-300' : 'bg-zinc-900/50 text-zinc-500'}`}>last1</div>
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<5) ? 'bg-amber-900/40 text-amber-300' : 'bg-zinc-900/50 text-zinc-500'}`}>last2</div>
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<6) ? 'bg-red-900/40 text-red-300' : 'bg-zinc-900/50 text-zinc-500'}`}>dual_flag</div>
-                      <div className={`p-1 rounded ${mem[SRAM.btn_state] & (1<<7) ? 'bg-red-900/40 text-red-300' : 'bg-zinc-900/50 text-zinc-500'}`}>dual_exec</div>
+                      <div className={`p-1 rounded ${mem[SRAM.sys_flags] & (1<<0) ? 'bg-red-900/40 text-red-300' : 'bg-zinc-900/50 text-zinc-500'}`}>dual_flag</div>
+                      <div className={`p-1 rounded ${mem[SRAM.sys_flags] & (1<<1) ? 'bg-red-900/40 text-red-300' : 'bg-zinc-900/50 text-zinc-500'}`}>dual_exec</div>
+                      <div className={`p-1 rounded ${mem[SRAM.sys_flags] & (1<<2) ? 'bg-amber-900/40 text-amber-300' : 'bg-zinc-900/50 text-zinc-500'}`}>last1</div>
+                      <div className={`p-1 rounded ${mem[SRAM.sys_flags] & (1<<3) ? 'bg-amber-900/40 text-amber-300' : 'bg-zinc-900/50 text-zinc-500'}`}>last2</div>
                     </div>
                   </div>
                 </div>
@@ -502,6 +509,9 @@ export default function App() {
                     <span>SRAM</span>
                   </div>
                 </div>
+                
+                <LevelsDisplay config={config} mem={mem} />
+                <PWMWaveform duty={getLedVoltage(mem, vccSlider, config).duty} />
               </>
             )}
 
@@ -560,12 +570,12 @@ export default function App() {
                     </button>
                   </div>
                   <div className="flex justify-between items-center text-amber-300 mt-2">
-                    <span>#define CFG_DIM_SEC</span>
-                    <input type="number" value={config.CFG_DIM_SEC} onChange={e => handleConfigChange('CFG_DIM_SEC', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-amber-500" />
+                    <span>#define CFG_DIM_MIN</span>
+                    <input type="number" value={config.CFG_DIM_MIN} onChange={e => handleConfigChange('CFG_DIM_MIN', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-amber-500" />
                   </div>
                   <div className="flex justify-between items-center text-amber-300 mt-2">
-                    <span>#define CFG_OFF_SEC</span>
-                    <input type="number" value={config.CFG_OFF_SEC} onChange={e => handleConfigChange('CFG_OFF_SEC', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-amber-500" />
+                    <span>#define CFG_OFF_MIN</span>
+                    <input type="number" value={config.CFG_OFF_MIN} onChange={e => handleConfigChange('CFG_OFF_MIN', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-amber-500" />
                   </div>
                 </div>
 
@@ -600,6 +610,32 @@ export default function App() {
                   <div className="flex justify-between items-center text-red-300 mt-2">
                     <span>#define CFG_VLM_FILTER_MS</span>
                     <input type="number" value={config.CFG_VLM_FILTER_MS} onChange={e => handleConfigChange('CFG_VLM_FILTER_MS', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-red-500" />
+                  </div>
+                </div>
+
+                
+                {/* Voltage Compensation Settings */}
+                <div className="flex flex-col gap-1 border-b border-zinc-800/50 pb-3 mt-3">
+                  <div className="flex justify-between items-center text-purple-300">
+                    <span>#define CFG_VOLTAGE_COMP_EN</span>
+                    <button 
+                      onClick={() => handleConfigChange('CFG_VOLTAGE_COMP_EN', config.CFG_VOLTAGE_COMP_EN ? 0 : 1)}
+                      className={`px-3 py-1 rounded text-[10px] font-bold border transition-colors ${config.CFG_VOLTAGE_COMP_EN ? 'bg-purple-900/40 border-purple-500/50 text-purple-400' : 'bg-zinc-900 border-zinc-700 text-zinc-500'}`}
+                    >
+                      {config.CFG_VOLTAGE_COMP_EN ? '1' : '0'}
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center text-purple-300 mt-2">
+                    <span title="Typical VCC voltage x10">#define CFG_TYPICAL_VCC_DV</span>
+                    <input type="number" value={config.CFG_TYPICAL_VCC_DV} onChange={e => handleConfigChange('CFG_TYPICAL_VCC_DV', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-purple-500" />
+                  </div>
+                  <div className="flex justify-between items-center text-purple-300 mt-2">
+                    <span title="Typical LED Vf x10">#define CFG_LED_VF_DV</span>
+                    <input type="number" value={config.CFG_LED_VF_DV} onChange={e => handleConfigChange('CFG_LED_VF_DV', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-purple-500" />
+                  </div>
+                  <div className="flex justify-between items-center text-purple-300 mt-2">
+                    <span title="Voltage Comp Gap">#define CFG_VCOMP_GAP</span>
+                    <input type="number" value={config.CFG_VCOMP_GAP} onChange={e => handleConfigChange('CFG_VCOMP_GAP', parseInt(e.target.value) || 0)} className="bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 w-20 text-right tabular-nums outline-none focus:border-purple-500" />
                   </div>
                 </div>
 
@@ -660,3 +696,80 @@ export default function App() {
 }
 
 
+function PWMWaveform({ duty, freq = 15600 }: { duty: number, freq?: number }) {
+  return (
+    <div className="flex flex-col gap-1 mt-4 border-t border-zinc-800 pt-3">
+      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">PWM Output Waveform</span>
+      <div className="h-16 bg-zinc-950 border border-zinc-800 rounded relative overflow-hidden flex items-end">
+        {/* Draw a CSS based waveform */}
+        <div className="absolute inset-0 flex">
+            {Array.from({length: 10}).map((_, i) => (
+                <div key={i} className="h-full flex flex-col justify-end" style={{ width: '10%' }}>
+                    <div className="bg-emerald-500 w-full" style={{ height: duty > 0 ? '100%' : '0%', width: `${duty * 100}%` }}></div>
+                    <div className="bg-zinc-900 w-full" style={{ height: duty < 1 ? '10%' : '0%', width: `${(1 - duty) * 100}%` }}></div>
+                </div>
+            ))}
+        </div>
+      </div>
+      <div className="flex justify-between text-[8px] text-zinc-600">
+        <span>0</span>
+        <span>~{(1000/freq).toFixed(2)}ms / cycle</span>
+      </div>
+    </div>
+  );
+}
+
+function LevelsDisplay({ config, mem }: { config: FirmwareConfig, mem: Uint8Array }) {
+  const maxLimit = mem[SRAM.dyn_max_level] || config.CFG_MAX_LIMIT_LEVEL;
+  const currentLevel = mem[SRAM.saved_level];
+  const isMapped = mem[SRAM.dyn_max_is_mapped];
+  const map = config.CFG_PWM_MAP;
+  
+  return (
+    <div className="flex flex-col gap-1 mt-4 border-t border-zinc-800 pt-3">
+      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Brightness Levels</span>
+      <div className="flex gap-1 overflow-x-auto custom-scrollbar pb-1">
+        {Array.from({ length: config.CFG_MAX_LIMIT_LEVEL }).map((_, i) => {
+           
+           const lvl = i + 1;
+           let eff_level = (lvl > maxLimit) ? maxLimit : lvl;
+           let pwmVal = map[eff_level - 1] || 0;
+           // If it's the max limit and it's mapped, the compensation might boost it
+           let l_vlm = mem[SRAM.last_vlm_state];
+           if (config.CFG_VOLTAGE_COMP_EN && l_vlm < 5) {
+               if (eff_level === maxLimit && isMapped) {
+                   pwmVal = 255;
+               } else {
+                   const { S_TAB } = getTabs(config);
+                   let s = S_TAB[l_vlm];
+                   let res = 0, a = map[eff_level-1];
+                   while (s) {
+                       if (s & 1) res += a;
+                       a <<= 1;
+                       s >>= 1;
+                   }
+                   res >>= 5;
+                   pwmVal = (res > 255) ? 255 : res;
+               }
+           }
+
+           const isVirtual = lvl > maxLimit && isMapped;
+           const isActive = lvl === currentLevel;
+           const isAvailable = lvl <= maxLimit;
+           
+           return (
+             <div key={lvl} className={`flex-shrink-0 w-12 h-14 rounded flex flex-col items-center justify-center border transition-colors \${
+                isActive ? 'bg-amber-900/40 border-amber-500/50 text-amber-300' : 
+                !isAvailable ? 'bg-zinc-900/20 border-zinc-800/30 text-zinc-700' :
+                'bg-zinc-900/50 border-zinc-800 text-zinc-400'
+             }`}>
+                <span className="text-[10px] font-bold">L{lvl}</span>
+                <span className="text-[8px] opacity-70">PWM {pwmVal}</span>
+                {isActive && <div className="w-1 h-1 bg-amber-400 rounded-full mt-1 animate-pulse"></div>}
+             </div>
+           )
+        })}
+      </div>
+    </div>
+  );
+}
