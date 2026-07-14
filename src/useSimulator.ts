@@ -316,6 +316,13 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
 
   let sys_state = read8(SRAM.sys_state);
 
+  if (sys_state === 0) {
+    if (!b1 || !b2) {
+      do_sleep();
+      return;
+    }
+  }
+
   let act = 0;
   let sys_flags = read8(SRAM.sys_flags);
   let dual_flag = (sys_flags & 1) ? 1 : 0;
@@ -350,13 +357,6 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
   last2 = b2;
   sys_flags = (dual_flag) | (dual_exec << 1) | (last1 << 2) | (last2 << 3);
   write8(SRAM.sys_flags, sys_flags);
-
-  if (sys_state === 0) {
-    if (act !== 3) {
-      do_sleep();
-      return;
-    }
-  }
 
   let vlmf = 0;
   const vlm_volt = getVlmVoltage(config.CFG_VLM_LEVEL);
@@ -502,7 +502,7 @@ export function getLedVoltage(mem: Uint8Array, vcc: number, config: FirmwareConf
   }
   
   return {
-      vLed: vLedOn, // Average V_LED isn't as useful as the ON state voltage drop across the LED
+      vLed: dutyLow > 0 ? vLedOn : 0,
       iLed: iLedOn * dutyLow, // Average current
       duty: dutyLow
   };
