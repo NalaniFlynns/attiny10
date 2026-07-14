@@ -110,6 +110,24 @@ function HexByte({ val }: { val: number }) {
 export default function App() {
   const { mem, vccRef, btn1Ref, btn2Ref, warpSpeedRef, renderTrigger, logs, resetBattery, config, setConfig } = useSimulator();
   const [vccSlider, setVccSlider] = useState(3.1);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '1' || e.key.toLowerCase() === 'a') btn1Ref.current = true;
+      if (e.key === '2' || e.key.toLowerCase() === 'd') btn2Ref.current = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === '1' || e.key.toLowerCase() === 'a') btn1Ref.current = false;
+      if (e.key === '2' || e.key.toLowerCase() === 'd') btn2Ref.current = false;
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
   const [warpSpeed, setWarpSpeed] = useState(1);
   const [rightTab, setRightTab] = useState<'memory' | 'config'>('memory');
   const logContainerRef = useRef<HTMLDivElement>(null);

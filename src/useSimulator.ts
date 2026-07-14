@@ -195,14 +195,23 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
   const read32 = (addr: number) => read16(addr) | (read16(addr + 2) << 16);
   const write32 = (addr: number, val: number) => { write16(addr, val & 0xFFFF); write16(addr + 2, (val >> 16) & 0xFFFF); };
 
+  // Increment clock (~64516 CPU cycles per tick at 4MHz)
   write32(SRAM.clock_cycles_l, (read32(SRAM.clock_cycles_l) + 64516) >>> 0);
 
+  // PB pins (inverted: 0 is pressed, 1 is released)
   let pinb = read8(IO.PINB);
   pinb = (pinb & ~(1 << 1)) | ((btn1 ? 0 : 1) << 1);
   pinb = (pinb & ~(1 << 2)) | ((btn2 ? 0 : 1) << 2);
   write8(IO.PINB, pinb);
 
   const CFG_MAX_LEVEL = Math.min(config.CFG_MAX_LIMIT_LEVEL, config.CFG_PWM_MAP.length);
+
+  if (read16(SRAM.magic_cookie) !== 0xA55A || read8(SRAM.saved_level) < 1 || read8(SRAM.saved_level) > CFG_MAX_LEVEL) {
+    write16(SRAM.magic_cookie, 0xA55A);
+    write8(SRAM.saved_level, config.CFG_DEFAULT_LEVEL);
+    write8(SRAM.dyn_max_level, CFG_MAX_LEVEL);
+    write8(SRAM.last_vlm_state, 5);
+  }
 
   const get_vlm_state = () => {
     if (vcc >= 2.5) return 5;
@@ -288,18 +297,13 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
     write8(IO.PORTB, read8(IO.PORTB) | 1); // LED off
     write8(IO.VLMCSR, 0);
     
-    write8(SRAM.last_raw_pb, ~read8(IO.PINB) & 0x06);
+    write8(SRAM.last_raw_pb, (~read8(IO.PINB)) & 0x06);
     write8(SRAM.stable_pb, read8(SRAM.last_raw_pb));
   };
 
-  if (read16(SRAM.magic_cookie) !== 0xA55A || read8(SRAM.saved_level) < 1 || read8(SRAM.saved_level) > CFG_MAX_LEVEL) {
-    write16(SRAM.magic_cookie, 0xA55A);
-    write8(SRAM.saved_level, config.CFG_DEFAULT_LEVEL);
-    write8(SRAM.dyn_max_level, CFG_MAX_LEVEL);
-    write8(SRAM.last_vlm_state, 5);
-  }
+  // Main loop logic
+  let raw_pb = (~read8(IO.PINB)) & 0x06;
 
-  let raw_pb = ~read8(IO.PINB) & 0x06;
   if (raw_pb === read8(SRAM.last_raw_pb)) {
     write8(SRAM.stable_pb, raw_pb);
   }
@@ -418,11 +422,6 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
         if (!config.CFG_ENABLE_MEMORY) write8(SRAM.saved_level, config.CFG_DEFAULT_LEVEL);
         if (read8(SRAM.saved_level) > CFG_MAX_LEVEL) write8(SRAM.saved_level, CFG_MAX_LEVEL);
         
-        update_dynamic_levels();
-        let sl = read8(SRAM.saved_level);
-        if (sl > read8(SRAM.dyn_max_level)) {
-            write8(SRAM.saved_level, read8(SRAM.dyn_max_level));
-        }
       } else {
         log("[PWR] Manual Shutdown (Dual Hold).");
         do_sleep();
