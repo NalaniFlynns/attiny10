@@ -263,27 +263,50 @@ export default function App() {
           {/* Interactive Components */}
           <section className="bg-zinc-900/80 border border-zinc-800 rounded flex-1 flex flex-col gap-4 p-4 shadow-xl backdrop-blur-sm min-h-[300px]">
             <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Physical Interaction</h3>
-            <div className="flex-1 flex flex-row justify-center items-center gap-8">
+            <div className="flex-1 flex flex-row justify-center items-center gap-6">
               {/* Button 1 */}
               <div className="flex flex-col items-center gap-3">
                 <button 
                   onPointerDown={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); btn1Ref.current = true; }}
                   onPointerUp={() => btn1Ref.current = false}
                   onPointerLeave={() => btn1Ref.current = false}
-                  className={`relative w-24 h-24 rounded-full border-b-4 transition-all duration-75 outline-none flex items-center justify-center group ${
+                  className={`relative w-20 h-20 rounded-full border-b-4 transition-all duration-75 outline-none flex items-center justify-center group ${
                     btn1Ref.current 
                       ? 'border-b-0 translate-y-1 bg-zinc-800 border-zinc-900 shadow-inner' 
                       : 'border-zinc-950 bg-zinc-800 shadow-[0_5px_15px_rgba(0,0,0,0.5)] active:border-b-0 active:translate-y-1'
                   }`}
                   style={{ touchAction: 'none' }}
                 >
-                  <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center transition-colors ${btn1Ref.current ? 'bg-red-800/80 border-red-900/80 text-red-950' : 'bg-red-600/90 border-red-700 text-red-900/50'}`}>
-                    <span className="font-bold text-xl">+</span>
+                  <div className={`w-14 h-14 rounded-full border-4 flex items-center justify-center transition-colors ${btn1Ref.current ? 'bg-red-800/80 border-red-900/80 text-red-950' : 'bg-red-600/90 border-red-700 text-red-900/50'}`}>
+                    <span className="font-bold text-lg">+</span>
                   </div>
                 </button>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-zinc-500 tracking-widest block">BT1 (PB1)</span>
-                  <span className="text-[8px] text-zinc-600">BRIGHTNESS UP</span>
+                  <span className="text-[9px] font-bold text-zinc-500 tracking-widest block">BT1</span>
+                  <span className="text-[8px] text-zinc-600">UP [Key A]</span>
+                </div>
+              </div>
+              
+              {/* Dual Button */}
+              <div className="flex flex-col items-center gap-3">
+                <button 
+                  onPointerDown={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); btn1Ref.current = true; btn2Ref.current = true; }}
+                  onPointerUp={() => { btn1Ref.current = false; btn2Ref.current = false; }}
+                  onPointerLeave={() => { btn1Ref.current = false; btn2Ref.current = false; }}
+                  className={`relative w-20 h-20 rounded-full border-b-4 transition-all duration-75 outline-none flex items-center justify-center group ${
+                    (btn1Ref.current && btn2Ref.current)
+                      ? 'border-b-0 translate-y-1 bg-zinc-800 border-zinc-900 shadow-inner' 
+                      : 'border-zinc-950 bg-zinc-800 shadow-[0_5px_15px_rgba(0,0,0,0.5)] active:border-b-0 active:translate-y-1'
+                  }`}
+                  style={{ touchAction: 'none' }}
+                >
+                  <div className={`w-14 h-14 rounded-full border-4 flex items-center justify-center transition-colors ${(btn1Ref.current && btn2Ref.current) ? 'bg-amber-800/80 border-amber-900/80 text-amber-950' : 'bg-amber-600/90 border-amber-700 text-amber-900/50'}`}>
+                    <span className="font-bold text-[10px]">DUAL</span>
+                  </div>
+                </button>
+                <div className="text-center">
+                  <span className="text-[9px] font-bold text-amber-600/80 tracking-widest block">HOLD BOTH</span>
+                  <span className="text-[8px] text-zinc-600">TO WAKE</span>
                 </div>
               </div>
               
@@ -293,20 +316,20 @@ export default function App() {
                   onPointerDown={(e) => { e.currentTarget.releasePointerCapture(e.pointerId); btn2Ref.current = true; }}
                   onPointerUp={() => btn2Ref.current = false}
                   onPointerLeave={() => btn2Ref.current = false}
-                  className={`relative w-24 h-24 rounded-full border-b-4 transition-all duration-75 outline-none flex items-center justify-center group ${
+                  className={`relative w-20 h-20 rounded-full border-b-4 transition-all duration-75 outline-none flex items-center justify-center group ${
                     btn2Ref.current 
                       ? 'border-b-0 translate-y-1 bg-zinc-800 border-zinc-900 shadow-inner' 
                       : 'border-zinc-950 bg-zinc-800 shadow-[0_5px_15px_rgba(0,0,0,0.5)] active:border-b-0 active:translate-y-1'
                   }`}
                   style={{ touchAction: 'none' }}
                 >
-                  <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center transition-colors ${btn2Ref.current ? 'bg-zinc-700/80 border-zinc-800/80 text-zinc-900' : 'bg-zinc-600 border-zinc-700 text-zinc-800/50'}`}>
-                    <span className="font-bold text-xl">-</span>
+                  <div className={`w-14 h-14 rounded-full border-4 flex items-center justify-center transition-colors ${btn2Ref.current ? 'bg-zinc-700/80 border-zinc-800/80 text-zinc-900' : 'bg-zinc-600 border-zinc-700 text-zinc-800/50'}`}>
+                    <span className="font-bold text-lg">-</span>
                   </div>
                 </button>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-zinc-500 tracking-widest block">BT2 (PB2)</span>
-                  <span className="text-[8px] text-zinc-600">BRIGHTNESS DOWN</span>
+                  <span className="text-[9px] font-bold text-zinc-500 tracking-widest block">BT2</span>
+                  <span className="text-[8px] text-zinc-600">DOWN [Key D]</span>
                 </div>
               </div>
             </div>
@@ -350,12 +373,15 @@ export default function App() {
                   {/* Realtime Output Parameters */}
                   <div className="bg-zinc-950/50 border border-zinc-800/50 p-2 rounded col-span-1 md:col-span-2">
                     <span className="block text-[8px] text-zinc-500 tracking-widest mb-1">VOUT & LED ESTIMATION</span>
-                    <div className="flex justify-between items-center text-xs font-bold text-slate-300 tabular-nums">
-                      <div className="w-1/3">V_LED: <span className="text-emerald-400">{getLedVoltage(mem, vccSlider, config).vLed.toFixed(2)}V</span></div>
-                      <div className="w-1/3">I_LED: <span className="text-emerald-400">
-                        {(getLedVoltage(mem, vccSlider, config).iLed * 1000).toFixed(1)}mA
+                    <div className="flex justify-between items-center text-[10px] md:text-xs font-bold text-slate-300 tabular-nums">
+                      <div className="w-1/4">V_LED: <span className="text-emerald-400">{getLedVoltage(mem, vccSlider, config).vLed.toFixed(3)}V</span></div>
+                      <div className="w-1/4">I_LED: <span className="text-emerald-400">
+                        {(getLedVoltage(mem, vccSlider, config).iLed * 1000).toFixed(3)}mA
                       </span></div>
-                      <div className="w-1/3 text-right">PWM: <span className="text-indigo-400">{mem[SRAM.comp_val]}</span><span className="text-[9px] text-zinc-600">/255</span></div>
+                      <div className="w-1/4">P_LED: <span className="text-emerald-400">
+                        {(getLedVoltage(mem, vccSlider, config).vLed * getLedVoltage(mem, vccSlider, config).iLed * 1000).toFixed(3)}mW
+                      </span></div>
+                      <div className="w-1/4 text-right">PWM: <span className="text-indigo-400">{mem[SRAM.comp_val]}</span><span className="text-[9px] text-zinc-600">/255</span></div>
                     </div>
                   </div>
 
@@ -719,7 +745,6 @@ function PWMWaveform({ duty, freq = 15600 }: { duty: number, freq?: number }) {
     <div className="flex flex-col gap-1 mt-4 border-t border-zinc-800 pt-3">
       <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">PWM Output Waveform</span>
       <div className="h-16 bg-zinc-950 border border-zinc-800 rounded relative overflow-hidden flex items-end">
-        {/* Draw a CSS based waveform */}
         <div className="absolute inset-0 flex items-center justify-center">
           <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
             {Array.from({length: 10}).map((_, i) => {
@@ -728,28 +753,26 @@ function PWMWaveform({ duty, freq = 15600 }: { duty: number, freq?: number }) {
               const lowWidth = duty * 10;
               return (
                 <g key={i}>
-                  {highWidth > 0 && <line x1={startX} y1="10" x2={startX + highWidth} y2="10" stroke="#10b981" strokeWidth="2" />}
-                  {highWidth > 0 && lowWidth > 0 && <line x1={startX + highWidth} y1="10" x2={startX + highWidth} y2="90" stroke="#10b981" strokeWidth="2" />}
-                  {lowWidth > 0 && <line x1={startX + highWidth} y1="90" x2={startX + 10} y2="90" stroke="#10b981" strokeWidth="2" />}
-                  {highWidth > 0 && lowWidth > 0 && i < 9 && <line x1={startX + 10} y1="90" x2={startX + 10} y2="10" stroke="#10b981" strokeWidth="2" />}
+                  {highWidth > 0 && <line x1={startX} y1="10" x2={startX + highWidth} y2="10" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
+                  {highWidth > 0 && lowWidth > 0 && <line x1={startX + highWidth} y1="10" x2={startX + highWidth} y2="90" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
+                  {lowWidth > 0 && <line x1={startX + highWidth} y1="90" x2={startX + 10} y2="90" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
+                  {lowWidth > 0 && i < 9 && (1 - duty) * 10 > 0 && <line x1={startX + 10} y1="90" x2={startX + 10} y2="10" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
                 </g>
-              );
+              )
             })}
           </svg>
         </div>
-      </div>
-      <div className="flex justify-between text-[8px] text-zinc-600">
-        <span>0</span>
-        <span>~{(1000/freq).toFixed(2)}ms / cycle</span>
+        <div className="absolute bottom-1 left-1 text-[8px] text-zinc-700 font-mono">0</div>
+        <div className="absolute bottom-1 right-1 text-[8px] text-zinc-700 font-mono">~{(1000/freq).toFixed(2)}ms / cycle</div>
       </div>
     </div>
   );
 }
 
 function LevelsDisplay({ config, mem }: { config: FirmwareConfig, mem: Uint8Array }) {
-  const maxLimit = mem[SRAM.dyn_max_level] || config.CFG_MAX_LIMIT_LEVEL;
-  const currentLevel = mem[SRAM.saved_level];
-  const isMapped = mem[SRAM.dyn_max_is_mapped];
+  const maxLimit = mem[SRAM.dyn_max_level] || 1;
+  const currentLevel = mem[SRAM.saved_level] || 1;
+  const isMapped = mem[SRAM.dyn_max_is_mapped] === 1;
   const map = config.CFG_PWM_MAP;
   
   return (
@@ -757,17 +780,20 @@ function LevelsDisplay({ config, mem }: { config: FirmwareConfig, mem: Uint8Arra
       <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Brightness Levels</span>
       <div className="flex gap-1 overflow-x-auto custom-scrollbar pb-1">
         {Array.from({ length: config.CFG_MAX_LIMIT_LEVEL }).map((_, i) => {
-           
            const lvl = i + 1;
+           const isVirtual = lvl > maxLimit && isMapped && lvl === maxLimit + 1;
+           const isAvailable = lvl <= maxLimit || isVirtual;
+           const isActive = lvl === currentLevel;
+
            let eff_level = (lvl > maxLimit) ? maxLimit : lvl;
            let pwmVal = map[eff_level - 1] || 0;
-           // If it's the max limit and it's mapped, the compensation might boost it
+           
            let l_vlm = mem[SRAM.last_vlm_state];
-           if (config.CFG_VOLTAGE_COMP_EN && l_vlm < 5) {
-               if (eff_level === maxLimit && isMapped) {
+           if (config.CFG_VOLTAGE_COMP_EN && l_vlm < 5 && isAvailable) {
+               if (isVirtual) {
                    pwmVal = 255;
                } else {
-                   const { S_TAB } = getTabs(config);
+                   const { S_TAB, G_TAB } = getTabs(config);
                    let s = S_TAB[l_vlm];
                    let res = 0, a = map[eff_level-1];
                    while (s) {
@@ -777,24 +803,31 @@ function LevelsDisplay({ config, mem }: { config: FirmwareConfig, mem: Uint8Arra
                    }
                    res >>= 5;
                    pwmVal = (res > 255) ? 255 : res;
+                   
+                   // Snap to 255 logic for levels display
+                   if (eff_level === maxLimit && !isMapped && map[eff_level-1] >= G_TAB[l_vlm]) {
+                       pwmVal = 255;
+                   }
                }
            }
-
-           const isVirtual = lvl > maxLimit && isMapped;
-           const isActive = lvl === currentLevel;
-           const isAvailable = lvl <= maxLimit;
            
            return (
-             <div key={lvl} className={`flex-shrink-0 w-12 h-14 rounded flex flex-col items-center justify-center border transition-colors \${
-                isActive ? 'bg-amber-900/40 border-amber-500/50 text-amber-300' : 
-                !isAvailable ? 'bg-zinc-900/20 border-zinc-800/30 text-zinc-700' :
-                'bg-zinc-900/50 border-zinc-800 text-zinc-400'
-             }`}>
-                <span className="text-[10px] font-bold">L{lvl}</span>
-                <span className="text-[8px] opacity-70">PWM {pwmVal}</span>
-                {isActive && <div className="w-1 h-1 bg-amber-400 rounded-full mt-1 animate-pulse"></div>}
+             <div 
+               key={i} 
+               className={`flex-shrink-0 min-w-[3.5rem] px-2 h-16 rounded border ${
+                 isActive ? 'border-amber-500 bg-amber-500/10' : 
+                 isAvailable ? 'border-zinc-800 bg-zinc-900/50' : 
+                 'border-zinc-900 bg-zinc-950/50 opacity-50'
+               } flex flex-col items-center justify-center relative`}
+             >
+               <span className={`text-xs font-bold ${isActive ? 'text-amber-400' : isAvailable ? 'text-zinc-300' : 'text-zinc-600 line-through'}`}>
+                 {isVirtual ? `L${maxLimit}+1` : `L${lvl}`}
+               </span>
+               {isAvailable && <span className="text-[8px] text-zinc-400 mt-1">PWM {pwmVal}</span>}
+               {!isAvailable && <span className="text-[8px] text-zinc-700 mt-1 font-bold">DISABLED</span>}
+               {isActive && <div className="absolute bottom-2 w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.8)]"></div>}
              </div>
-           )
+           );
         })}
       </div>
     </div>

@@ -214,11 +214,11 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
   }
 
   const get_vlm_state = () => {
-    if (vcc >= 2.5) return 5;
-    if (vcc >= 2.0) return 4;
+    if (vcc >= 2.6) return 5;
+    if (vcc >= 2.2) return 4;
     if (vcc >= 1.8) return 3;
-    if (vcc >= 1.6) return 2;
-    if (vcc >= 1.4) return 1;
+    if (vcc >= 1.5) return 2;
+    if (vcc >= 1.3) return 1;
     return 0;
   };
 
@@ -246,12 +246,14 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
       if (config.CFG_PWM_MAP[i-1] >= t) {
         if (i === 1) {
           write8(SRAM.dyn_max_level, 1);
+          write8(SRAM.dyn_max_is_mapped, 0);
         } else if (i > 1 && config.CFG_PWM_MAP[i-2] >= g) {
           write8(SRAM.dyn_max_level, i - 1);
+          write8(SRAM.dyn_max_is_mapped, 0);
         } else {
-          write8(SRAM.dyn_max_level, i);
+          write8(SRAM.dyn_max_level, i - 1);
+          write8(SRAM.dyn_max_is_mapped, 1);
         }
-        write8(SRAM.dyn_max_is_mapped, 1);
         return;
       }
     }
@@ -269,10 +271,10 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
     let l_vlm = read8(SRAM.last_vlm_state);
 
     if (config.CFG_VOLTAGE_COMP_EN && l_vlm < 5) {
-      if (eff_level === dyn_max_level && dyn_max_is_mapped) {
+      if (level > dyn_max_level && dyn_max_is_mapped) {
         comp = 255;
       } else {
-        const { S_TAB } = getTabs(config);
+        const { S_TAB, G_TAB } = getTabs(config);
         let s = S_TAB[l_vlm];
         let res = 0, a = config.CFG_PWM_MAP[eff_level-1];
         while (s) {
@@ -282,6 +284,11 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
         }
         res >>= 5;
         comp = (res > 255) ? 255 : res;
+        
+        // Snap to 255 if virtual level is not created and it's >= gap threshold
+        if (eff_level === dyn_max_level && !dyn_max_is_mapped && config.CFG_PWM_MAP[eff_level-1] >= G_TAB[l_vlm]) {
+           comp = 255;
+        }
       }
     } else {
       comp = config.CFG_PWM_MAP[eff_level-1];
@@ -291,18 +298,11 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
   };
 
   const do_sleep = () => {
-    if (read8(SRAM.sys_state) !== 0) log("[PWR] Entering SLEEP_MODE_PWR_DOWN.");
     write8(SRAM.sys_state, 0);
-    write8(IO.TCCR0A, 0); write8(IO.TCCR0B, 0);
-    write8(IO.PORTB, read8(IO.PORTB) | 1); // LED off
-    write8(IO.VLMCSR, 0);
-    
-    write8(SRAM.last_raw_pb, (~read8(IO.PINB)) & 0x06);
-    write8(SRAM.stable_pb, read8(SRAM.last_raw_pb));
+    write8(IO.OCR0AL, 255);
+    write8(IO.TCCR0A, 0);
   };
-
-
-  // Main loop logic
+  
   let raw_pb = (~read8(IO.PINB)) & 0x06;
 
   if (raw_pb === read8(SRAM.last_raw_pb)) {
@@ -316,13 +316,6 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
 
   let sys_state = read8(SRAM.sys_state);
 
-  if (sys_state === 0) {
-    if (!b1 || !b2) {
-      do_sleep();
-      return;
-    }
-  }
-
   let act = 0;
   let sys_flags = read8(SRAM.sys_flags);
   let dual_flag = (sys_flags & 1) ? 1 : 0;
@@ -334,7 +327,7 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
     dual_flag = 1;
     let hold_ticks = read8(SRAM.hold_ticks);
     if (hold_ticks < 0xFF) { hold_ticks++; write8(SRAM.hold_ticks, hold_ticks); }
-    if (hold_ticks === (config.CFG_HOLD_SEC * 62) && !dual_exec) {
+    if (hold_ticks >= (config.CFG_HOLD_SEC * 62) && !dual_exec) {
       act = 3; dual_exec = 1;
     }
   } else {
@@ -358,6 +351,13 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
   sys_flags = (dual_flag) | (dual_exec << 1) | (last1 << 2) | (last2 << 3);
   write8(SRAM.sys_flags, sys_flags);
 
+  if (sys_state === 0) {
+    if (act !== 3 && (!b1 || !b2)) {
+      do_sleep();
+      return;
+    }
+  }
+
   let vlmf = 0;
   const vlm_volt = getVlmVoltage(config.CFG_VLM_LEVEL);
   if (vlm_volt > 0 && vcc <= vlm_volt) {
@@ -373,13 +373,17 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
       vlm_ticks++;
       write8(SRAM.vlm_ticks, vlm_ticks);
       if (vlm_ticks >= Math.floor(config.CFG_VLM_FILTER_MS / 16)) {
-        if (sys_state !== 0) log(`[VLM] Under-voltage triggered (<${vlm_volt}V). Shutting down.`);
-        do_sleep();
+        if (sys_state !== 0) {
+            log(`[VLM] Under-voltage triggered (<${vlm_volt}V). Shutting down.`);
+            do_sleep();
+        }
         return;
       }
     } else {
-      if (sys_state !== 0) log(`[VLM] Under-voltage triggered (<${vlm_volt}V). Shutting down.`);
-      do_sleep();
+      if (sys_state !== 0) {
+          log(`[VLM] Under-voltage triggered (<${vlm_volt}V). Shutting down.`);
+          do_sleep();
+      }
       return;
     }
   } else {
@@ -428,7 +432,6 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
         write8(SRAM.sys_state, 1);
         if (!config.CFG_ENABLE_MEMORY) write8(SRAM.saved_level, config.CFG_DEFAULT_LEVEL);
         if (read8(SRAM.saved_level) > CFG_MAX_LEVEL) write8(SRAM.saved_level, CFG_MAX_LEVEL);
-        
       } else {
         log("[PWR] Manual Shutdown (Dual Hold).");
         do_sleep();
@@ -436,19 +439,14 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
       }
     }
     
-    if (read8(SRAM.sys_state) !== 0) {
+    if (read8(SRAM.sys_state) !== 0 && act !== 3) {
       let dyn_max_level = read8(SRAM.dyn_max_level);
       let dyn_max_is_mapped = read8(SRAM.dyn_max_is_mapped);
 
       if (read8(SRAM.sys_state) === 2) {
-        sys_state = 1;
         write8(SRAM.sys_state, 1);
         log("[PWR] Wake from DIM.");
       } else if (act === 1 || act === 2) {
-        update_dynamic_levels();
-        dyn_max_level = read8(SRAM.dyn_max_level);
-        dyn_max_is_mapped = read8(SRAM.dyn_max_is_mapped);
-        
         let saved_level = read8(SRAM.saved_level);
         if (act === 1) { // Up
           if (saved_level < dyn_max_level) saved_level++;
@@ -462,11 +460,26 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
         write8(SRAM.saved_level, saved_level);
         log(`[BTN] ${act === 1 ? 'UP' : 'DOWN'}. Level: ${saved_level}/${CFG_MAX_LEVEL}`);
       }
-      
-      apply_pwm(read8(SRAM.saved_level));
-      write8(IO.TCCR0A, (1 << 7) | 1); // COM0A1 | WGM00
-      write8(IO.TCCR0B, (1 << 3) | 1); // WGM02 | CS00
     }
+  }
+  
+  // Real-time calculation of PWM and levels if system is active
+  if (read8(SRAM.sys_state) === 1) {
+    update_dynamic_levels();
+    
+    // Clamp saved_level if it exceeds the new dynamic max + virtual level
+    let current_saved = read8(SRAM.saved_level);
+    let dyn_max = read8(SRAM.dyn_max_level);
+    let is_mapped = read8(SRAM.dyn_max_is_mapped);
+    let max_allowed = dyn_max + is_mapped;
+    
+    if (current_saved > max_allowed) {
+        write8(SRAM.saved_level, max_allowed);
+    }
+    
+    apply_pwm(read8(SRAM.saved_level));
+    write8(IO.TCCR0A, (1 << 7) | 1); // COM0A1 | WGM00
+    write8(IO.TCCR0B, (1 << 3) | 1); // WGM02 | CS00
   }
 }
 export function getLedVoltage(mem: Uint8Array, vcc: number, config: FirmwareConfig) {
@@ -474,16 +487,14 @@ export function getLedVoltage(mem: Uint8Array, vcc: number, config: FirmwareConf
   const portb = mem[IO.PORTB];
   const tccr0a = mem[IO.TCCR0A];
   const ocr0a = mem[IO.OCR0AL];
+  const sys_state = mem[SRAM.sys_state];
   
+  if (sys_state === 0) return { vLed: 0, iLed: 0, duty: 0 }; // System off
   if (!(ddrb & 1)) return { vLed: 0, iLed: 0, duty: 0 }; // Floating/Input
   
-  // LED is Active Low (Anode to VCC, Cathode to PB0)
-  // When PB0 is LOW, LED is ON.
   let dutyLow = 0;
   
   if (tccr0a & (1 << 7)) { // COM0A1 set -> PWM
-      // Fast PWM, Clear OC0A on match, Set at Bottom.
-      // High time is proportional to OCR0A. Low time is (255 - OCR0A).
       dutyLow = (255 - ocr0a) / 255;
   } else {
       dutyLow = (portb & 1) ? 0 : 1;
@@ -502,8 +513,8 @@ export function getLedVoltage(mem: Uint8Array, vcc: number, config: FirmwareConf
   }
   
   return {
-      vLed: dutyLow > 0 ? vLedOn : 0,
-      iLed: iLedOn * dutyLow, // Average current
+      vLed: dutyLow > 0 ? (vLedOn * dutyLow) : 0,
+      iLed: iLedOn * dutyLow,
       duty: dutyLow
   };
 }
