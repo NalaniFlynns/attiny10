@@ -95,7 +95,7 @@ function HdrSmdLed({ voltage, iLed, duty }: { voltage: number, iLed: number, dut
         </div>
       </div>
       <div className="mt-4 text-center">
-        <span className="text-[10px] font-bold text-zinc-500 tracking-widest">LED (0402 SMD)</span>
+        <span className="text-[10px] font-bold text-zinc-500 tracking-widest">LED (0603 SMD)</span>
         <div className="text-[9px] text-red-400/80 mt-1 tabular-nums">{(voltage > 0 ? (duty * 255) / 2.55 : 0).toFixed(1)}% DUTY</div>
         {hasWebGPU ? <div className="text-[8px] text-emerald-500/70 mt-1">HDR ACTIVE</div> : <div className="text-[8px] text-amber-500/70 mt-1">HDR OFF</div>}
       </div>
