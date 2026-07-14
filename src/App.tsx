@@ -1,107 +1,8 @@
 import React, { useState, Fragment, useEffect, useRef } from 'react';
+import { HdrSmdLed } from './HdrSmdLed';
 import { Cpu, Zap, FastForward, RotateCcw, Activity, Settings2, Database } from 'lucide-react';
 import { IO, SRAM, getLedVoltage, useSimulator, FirmwareConfig, defaultFirmwareConfig, getVlmVoltage, getTabs, calcScale } from './useSimulator';
 
-function HdrSmdLed({ voltage, iLed, duty }: { voltage: number, iLed: number, duty: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const deviceRef = useRef<any>(null);
-  const contextRef = useRef<any>(null);
-  const [hasWebGPU, setHasWebGPU] = useState(true);
-
-  useEffect(() => {
-    let isActive = true;
-    async function init() {
-      try {
-        if (!navigator.gpu) throw new Error("No WebGPU");
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) throw new Error("No Adapter");
-        const device = await adapter.requestDevice();
-        if (!isActive) return;
-        deviceRef.current = device;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const context = canvas.getContext('webgpu') as any;
-        if (!context) throw new Error("No Context");
-        
-        contextRef.current = context;
-        context.configure({
-          device,
-          format: navigator.gpu.getPreferredCanvasFormat(),
-          colorSpace: 'display-p3',
-          toneMapping: { mode: 'extended' },
-          alphaMode: 'premultiplied'
-        });
-      } catch (e) {
-        if (isActive) setHasWebGPU(false);
-      }
-    }
-    init();
-    return () => { isActive = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!deviceRef.current || !contextRef.current) return;
-    const device = deviceRef.current;
-    const context = contextRef.current;
-    
-    // Convert 0-255 PWM to intensity (with gamma curve approx). 255 -> 5.0 HDR multiplier
-    let intensity = (duty > 0) ? Math.pow(duty, 2.2) * 5.0 * (iLed > 0 ? 1 : 0) : 0;
-    
-    try {
-      const commandEncoder = device.createCommandEncoder();
-      const textureView = context.getCurrentTexture().createView();
-      const passEncoder = commandEncoder.beginRenderPass({
-        colorAttachments: [{
-          view: textureView,
-          clearValue: { r: intensity, g: 0.0, b: 0.0, a: intensity > 0 ? 1.0 : 0.0 },
-          loadOp: 'clear',
-          storeOp: 'store',
-        }]
-      });
-      passEncoder.end();
-      device.queue.submit([commandEncoder.finish()]);
-    } catch(e) {
-       // Ignore render errors
-    }
-  }, [voltage, (duty * 255)]);
-
-  return (
-    <div className="relative mb-6 flex flex-col items-center group">
-      <div className="w-16 h-8 bg-[#1e2022] border border-[#2a2d30] rounded-sm relative flex items-center justify-center shadow-lg transform transition-transform group-hover:scale-110">
-        {/* Solder pads */}
-        <div className="absolute left-0 w-3 h-full bg-gradient-to-r from-zinc-300 to-zinc-400 rounded-l-sm border-r border-zinc-500"></div>
-        <div className="absolute right-0 w-3 h-full bg-gradient-to-l from-zinc-300 to-zinc-400 rounded-r-sm border-l border-zinc-500"></div>
-        
-        {/* Emitting core */}
-        <div className="w-8 h-4 rounded-sm z-10 relative flex items-center justify-center">
-          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full mix-blend-screen rounded-sm" width={32} height={16} />
-          
-          {/* Base off color */}
-          <div className="absolute inset-0 bg-[#0a0000] rounded-sm -z-10"></div>
-          
-          {/* CSS Fallback / Glow Enhancement */}
-          <div 
-            className="absolute inset-0 rounded-sm transition-colors duration-[16ms]"
-            style={{ 
-              backgroundColor: (voltage > 0 && (duty * 255) > 0) ? `rgba(255, ${Math.floor((duty * 255)/4)}, ${Math.floor((duty * 255)/4)}, ${0.8 + 0.2 * ((duty * 255)/255)})` : 'transparent',
-              boxShadow: (voltage > 0 && (duty * 255) > 0) 
-                ? `0 0 ${20 + ((duty * 255) / 255) * 80}px ${5 + ((duty * 255) / 255) * 20}px rgba(255, 0, 0, ${0.4 + ((duty * 255)/255)*0.6}), 
-                   0 0 ${(duty * 255) >= 250 ? '120px 40px rgba(255, 100, 100, 0.8)' : '0px 0px rgba(0,0,0,0)'}`
-                : 'none',
-              mixBlendMode: 'screen',
-              filter: ((duty * 255) >= 250 && voltage > 0) ? 'brightness(1.5) contrast(1.2)' : 'none'
-            }}
-          ></div>
-        </div>
-      </div>
-      <div className="mt-4 text-center">
-        <span className="text-[10px] font-bold text-zinc-500 tracking-widest">LED (0603 SMD)</span>
-        <div className="text-[9px] text-red-400/80 mt-1 tabular-nums">{(voltage > 0 ? (duty * 255) / 2.55 : 0).toFixed(1)}% DUTY</div>
-        {hasWebGPU ? <div className="text-[8px] text-emerald-500/70 mt-1">HDR ACTIVE</div> : <div className="text-[8px] text-amber-500/70 mt-1">HDR OFF</div>}
-      </div>
-    </div>
-  );
-}
 
 function HexByte({ val }: { val: number }) {
   return <span>{val.toString(16).padStart(2, '0').toUpperCase()}</span>;
@@ -344,7 +245,30 @@ export default function App() {
             
             <div className="flex-1 flex flex-col items-center justify-center relative">
               {/* Virtual LED 0603 Style */}
-              <HdrSmdLed voltage={getLedVoltage(mem, vccSlider, config).vLed} iLed={getLedVoltage(mem, vccSlider, config).iLed} duty={getLedVoltage(mem, vccSlider, config).duty} />
+              <div className="w-16 h-8 bg-[#1e2022] border border-[#2a2d30] rounded-sm relative flex items-center justify-center shadow-lg transform transition-transform group-hover:scale-110 mb-6">
+        {/* Solder pads */}
+        <div className="absolute left-0 w-3 h-full bg-gradient-to-r from-zinc-300 to-zinc-400 rounded-l-sm border-r border-zinc-500 z-10"></div>
+        <div className="absolute right-0 w-3 h-full bg-gradient-to-l from-zinc-300 to-zinc-400 rounded-r-sm border-l border-zinc-500 z-10"></div>
+        
+        {/* Emitting core */}
+        <div className="w-8 h-4 rounded-sm z-10 relative flex items-center justify-center">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[64px] h-[64px] z-0 pointer-events-none flex items-center justify-center">
+                {(() => {
+                  const { pLed } = getLedVoltage(mem, vccSlider, config);
+                  // Calculate max theoretical power at 4.2V and 100% duty
+                  const Vf = (config.CFG_LED_VF_DV || 28) / 10;
+                  const iLedMax = Math.max(0, (4.2 - Vf) / 25.0);
+                  const pLedMax = Vf * iLedMax;
+                  const powerRatio = pLedMax > 0 ? (pLed / pLedMax) : 0;
+                  return <HdrSmdLed powerRatio={powerRatio} />;
+                })()}
+            </div>
+        </div>
+      </div>
+      <div className="text-center">
+        <span className="text-[10px] font-bold text-zinc-500 tracking-widest">LED (0603 SMD)</span>
+        <div className="text-[9px] text-zinc-400 mt-1 tabular-nums">{(getLedVoltage(mem, vccSlider, config).duty * 100).toFixed(1)}% DUTY</div>
+      </div>
 
               {/* Data Panel */}
               <div className="w-full flex-1 overflow-y-auto custom-scrollbar mt-4">
@@ -379,7 +303,7 @@ export default function App() {
                         {(getLedVoltage(mem, vccSlider, config).iLed * 1000).toFixed(3)}mA
                       </span></div>
                       <div className="w-1/4">P_LED: <span className="text-emerald-400">
-                        {(getLedVoltage(mem, vccSlider, config).vLed * getLedVoltage(mem, vccSlider, config).iLed * 1000).toFixed(3)}mW
+                        {(getLedVoltage(mem, vccSlider, config).pLed * 1000).toFixed(3)}mW
                       </span></div>
                       <div className="w-1/4 text-right">PWM: <span className="text-indigo-400">{mem[SRAM.comp_val]}</span><span className="text-[9px] text-zinc-600">/255</span></div>
                     </div>

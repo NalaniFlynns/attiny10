@@ -215,10 +215,10 @@ function runTick(mem: Uint8Array, vcc: number, btn1: boolean, btn2: boolean, log
 
   const get_vlm_state = () => {
     if (vcc >= 2.6) return 5;
-    if (vcc >= 2.2) return 4;
-    if (vcc >= 1.8) return 3;
-    if (vcc >= 1.5) return 2;
-    if (vcc >= 1.3) return 1;
+    if (vcc > 2.2) return 4;
+    if (vcc > 1.8) return 3;
+    if (vcc > 1.5) return 2;
+    if (vcc > 1.3) return 1;
     return 0;
   };
 
@@ -515,6 +515,7 @@ export function getLedVoltage(mem: Uint8Array, vcc: number, config: FirmwareConf
   return {
       vLed: dutyLow > 0 ? (vLedOn * dutyLow) : 0,
       iLed: iLedOn * dutyLow,
+      pLed: (vLedOn * iLedOn * dutyLow), // Average power is P_on * duty
       duty: dutyLow
   };
 }
